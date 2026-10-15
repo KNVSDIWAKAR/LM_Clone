@@ -1,0 +1,65 @@
+[
+  {
+    "name": "Encompass LOS",
+    "category": "Loan Origination",
+    "description": "Connect to ICE Mortgage Technology Encompass for loan file sync, status updates, and fee-schedule retrieval.",
+    "authType": "OAuth2",
+    "group": "composio"
+  },
+  {
+    "name": "Empower LOS",
+    "category": "Loan Origination",
+    "description": "Integrate with Black Knight Empower for origination data, TRID disclosures, and closing documents.",
+    "authType": "OAuth2",
+    "group": "composio"
+  },
+  {
+    "name": "Jira",
+    "category": "Issue Tracking",
+    "description": "Create and track mortgage operations tickets, link complaints to loan numbers, and escalate unresolved cases.",
+    "authType": "OAuth2",
+    "group": "composio"
+  },
+  {
+    "name": "ServiceNow",
+    "category": "IT Service Management",
+    "description": "Route high-priority mortgage operations cases to ServiceNow incidents and sync resolution status back to the agent.",
+    "authType": "OAuth2",
+    "group": "composio"
+  },
+  {
+    "name": "Gmail",
+    "category": "Communication",
+    "description": "Send borrower resolution letters, receive inbound complaint emails, and archive correspondence.",
+    "authType": "OAuth2",
+    "group": "composio"
+  },
+  {
+    "name": "Google Calendar",
+    "category": "Communication",
+    "description": "Schedule follow-up calls with borrowers and set RESPA response deadline reminders.",
+    "authType": "OAuth2",
+    "group": "composio"
+  },
+  {
+    "name": "CFPB Complaint Portal",
+    "category": "Regulatory",
+    "description": "Pull inbound CFPB consumer complaints via the public API and auto-route to the resolution workflow.",
+    "authType": "API Key",
+    "group": "direct"
+  },
+  {
+    "name": "MISMO Data Exchange",
+    "category": "Mortgage Standards",
+    "description": "Exchange standardized loan data using MISMO XML schema for cross-system fee validation.",
+    "authType": "API Key",
+    "group": "direct"
+  },
+  {
+    "name": "DocuSign",
+    "category": "e-Signature",
+    "description": "Send disclosure documents and resolution agreements for borrower e-signature.",
+    "authType": "OAuth2",
+    "group": "direct"
+  }
+]

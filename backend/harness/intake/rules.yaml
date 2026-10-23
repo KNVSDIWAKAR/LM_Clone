@@ -1,0 +1,62 @@
+# Kairos 2 · Domain harness — the rules of Process 1 (Intake & Doc Review).
+#
+# Change behaviour here, not in code. Bump `version` on every change: each agent run records
+# the version it used, so you can always tell which rules produced a decision.
+
+version: "2026.10.1"
+
+# ── BK / FC and the 60-day rule (step 2) ──────────────────────────────────────
+bk_fc:
+  bk_active_statuses: [Active]          # msp.bankruptcy.status values that end the case
+  bk_team: Onshore                      # who takes a case that ends on BK
+  sale_window_days: 60                  # a foreclosure sale this close (or closer) → LM Oversight
+  oversight_team: LM Oversight
+
+# ── Document rules (step 3) ───────────────────────────────────────────────────
+documents:
+  # Documents every package must contain.
+  required: [application_form, paystubs, bank_statement, credit_report]
+  min_paystubs: 2
+  # A letter of explanation is required when the MAA declares other income above this amount.
+  loe_required_when_other_income_over: 0
+
+  # Document dates must sit inside the MSP LMT3 review window:
+  # review_date_minus_90 ≤ date ≤ review_start_date. Outside it → Invalid Date Doc.
+  date_window: lmt3_review
+
+  # Gross wages on the MAA vs. paystub gross (per-period × periods per month).
+  income_tolerance_pct: 5
+
+  # Extraction flags raised by the document reader, and what each one means for the case.
+  #   missing → the borrower must send something (status Missing Doc)
+  #   review  → a person must look (paused to the Decision Inbox)
+  flags:
+    only_one_paystub: missing
+    bank_statement_gap: missing
+    loe_insufficient: missing
+    maa_page_count_issue: missing
+    missing_borrower_signature: review
+    missing_coborrower_signature: review
+    paystub_less_than_30_days_employment: review
+
+  # Fields that must match MSP. Names compare case- and punctuation-insensitively.
+  match_msp:
+    borrower_name: true
+    coborrower_name: true
+    borrower_ssn_last4: true
+    coborrower_ssn_last4: true
+    property_address: true
+    employer: true          # paystub employer vs the income source recorded in MSP NOTS
+    hardship_reason: true   # MAA hardship vs the hardship on the credit report
+
+review:
+  mismatch_team: LM Oversight
+
+# ── Sensors (Kairos 4) ────────────────────────────────────────────────────────
+sla:
+  intake_hours: 24          # documents received (extracted_at) → intake finished
+
+# ── Handoff (step 4) ──────────────────────────────────────────────────────────
+handoff:
+  team: LM Setup
+  checklist: [application_form, paystubs, bank_statement, credit_report, letter_of_explanation]

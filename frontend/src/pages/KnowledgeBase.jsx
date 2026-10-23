@@ -1,180 +1,224 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CircleAlert, FileText, LoaderCircle, Share2 } from "lucide-react";
+import { CircleAlert, FileText, LoaderCircle, Search, TriangleAlert } from "lucide-react";
 import Card from "../components/ui/Card";
-import DocumentViewer from "../components/knowledge/DocumentViewer";
+import { DocumentBody, FLAG_LABELS } from "../components/knowledge/LoanDocuments";
 import { apiGet } from "../lib/api";
 
 const mutedFg = { color: "hsl(var(--muted-foreground))" };
 const fg = { color: "hsl(var(--foreground))" };
+const WARN = "hsl(32, 90%, 38%)";
 
-/** Muted pill toggle shared by Knowledge Base / Agent Studio style pages. */
-export function SegmentedTabs({ options, value, onChange }) {
+const SHORT_LABELS = {
+  application_form: "MAA",
+  paystubs: "Paystubs",
+  bank_statement: "Bank",
+  credit_report: "Credit",
+  letter_of_explanation: "LOE",
+};
+
+function Status({ icon: Icon, children, spin }) {
   return (
-    <div className="flex gap-1 mb-6 p-1 rounded-lg w-fit" style={{ background: "hsl(var(--muted))" }}>
-      {options.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => onChange(opt.key)}
-          className="font-sans text-sm font-medium px-4 py-1.5 rounded-md transition-all"
-          style={
-            value === opt.key
-              ? { background: "hsl(var(--card))", ...fg, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
-              : mutedFg
-          }
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-2 py-12 justify-center" style={mutedFg}>
+      <Icon size={18} className={spin ? "animate-spin" : undefined} />
+      <span className="font-sans text-sm">{children}</span>
     </div>
   );
 }
 
-function SourceRow({ name, typeLabel, onClick }) {
+/** One loan in the left-hand list: borrower, loan number, which documents are on file. */
+function LoanRow({ item, active, onSelect }) {
   return (
     <button
-      onClick={onClick}
-      className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors hover:brightness-95"
+      onClick={onSelect}
+      className="w-full text-left px-3 py-2.5 rounded-md border transition-colors"
       style={{
-        background: "hsl(var(--card))",
-        borderColor: "hsl(var(--border))",
-        borderRadius: "var(--radius)",
-        cursor: onClick ? "pointer" : "default",
+        background: active ? "hsl(var(--muted))" : "hsl(var(--card))",
+        borderColor: active ? "hsl(var(--primary) / 0.35)" : "hsl(var(--border))",
       }}
     >
-      <FileText size={15} style={{ ...mutedFg, flexShrink: 0 }} />
-      <span className="font-mono text-sm flex-1 truncate" style={fg}>
-        {name}
-      </span>
-      <span
-        className="font-sans text-xs px-2 py-0.5 rounded-full border"
-        style={{ ...mutedFg, borderColor: "hsl(var(--border))", background: "hsl(var(--muted))", whiteSpace: "nowrap" }}
-      >
-        {typeLabel}
-      </span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-sans text-sm font-medium truncate" style={fg}>
+          {item.borrower_name}
+        </span>
+        {item.flags.length > 0 && (
+          <span
+            className="inline-flex items-center gap-1 font-sans text-[11px] font-medium shrink-0"
+            style={{ color: WARN }}
+            title={item.flags.map((f) => FLAG_LABELS[f] ?? f).join(", ")}
+          >
+            <TriangleAlert size={12} />
+            {item.flags.length}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-1">
+        <span className="font-mono text-xs" style={mutedFg}>
+          {item.loan_id}
+        </span>
+        <span className="flex gap-1" aria-label="Documents on file">
+          {Object.entries(item.documents).map(([type, present]) => (
+            <span
+              key={type}
+              title={`${SHORT_LABELS[type] ?? type}: ${present ? "on file" : "not submitted"}`}
+              className="inline-block rounded-full"
+              style={{ width: 7, height: 7, background: present ? "hsl(142, 60%, 40%)" : "hsl(var(--border))" }}
+            />
+          ))}
+        </span>
+      </div>
     </button>
   );
 }
 
-function SourceSection({ title, count, emptyText, children }) {
-  return (
-    <section>
-      <div className="flex items-center gap-2 mb-3">
-        <h2 className="font-sans text-xs font-medium uppercase tracking-widest" style={mutedFg}>
-          {title}
-        </h2>
-        <span className="font-sans text-xs px-1.5 py-0.5 rounded-full" style={{ background: "hsl(var(--muted))", ...mutedFg }}>
-          {count}
-        </span>
-      </div>
-      {count === 0 ? (
-        <p className="font-sans text-sm" style={mutedFg}>
-          {emptyText}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">{children}</div>
-      )}
-    </section>
-  );
-}
-
-function Sources() {
-  const [viewer, setViewer] = useState(null);
+export function LoanPackage({ loanId }) {
+  const [tab, setTab] = useState("application_form");
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["knowledge-sources"],
-    queryFn: () => apiGet("/api/knowledge/sources"),
+    queryKey: ["documents", loanId],
+    queryFn: () => apiGet(`/api/documents/${loanId}`),
   });
 
-  if (isLoading)
-    return (
-      <div className="flex items-center gap-2 py-12 justify-center">
-        <LoaderCircle size={18} className="animate-spin" style={mutedFg} />
-        <span className="font-sans text-sm" style={mutedFg}>
-          Loading sources…
-        </span>
-      </div>
-    );
+  if (isLoading) return <Status icon={LoaderCircle} spin>Loading documents…</Status>;
+  if (isError || !data) return <Status icon={CircleAlert}>Could not load this loan&apos;s documents.</Status>;
 
-  if (isError || !data)
-    return (
-      <div className="flex items-center gap-2 py-12 justify-center" style={mutedFg}>
-        <CircleAlert size={18} />
-        <span className="font-sans text-sm">Failed to load sources. Make sure the dev server is running.</span>
-      </div>
-    );
-
-  const loanFiles = data.loanFiles
-    .filter((f) => f !== ".gitkeep" && f.endsWith(".json"))
-    .map((f) => ({ raw: f, display: f.replace(/\.json$/, "") }));
-  const complaints = data.complaints.filter((f) => f !== ".gitkeep");
+  const raised = Object.entries(data.flags).filter(([, v]) => v);
+  const types = Object.keys(data.document_labels);
 
   return (
-    <>
-      {viewer && (
-        <DocumentViewer dir={viewer.dir} title={viewer.label} preselectId={viewer.id} onClose={() => setViewer(null)} />
+    <div className="flex flex-col gap-4 min-w-0">
+      <Card className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-mono text-xs" style={mutedFg}>
+            Loan {data.loan_id}
+          </p>
+          <h2 className="font-serif text-xl leading-tight" style={fg}>
+            {data.borrower_name}
+          </h2>
+          {data.coborrower_name && (
+            <p className="font-sans text-sm" style={mutedFg}>
+              with {data.coborrower_name}
+            </p>
+          )}
+        </div>
+        <div className="text-right font-sans text-xs" style={mutedFg}>
+          <p>
+            Extraction <span className="font-medium capitalize" style={fg}>{data.extraction_status}</span>
+          </p>
+          {data.extracted_at && <p>{new Date(data.extracted_at).toLocaleString()}</p>}
+        </div>
+      </Card>
+
+      {raised.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+          style={{ borderColor: "hsl(32, 90%, 70%)", background: "hsl(40, 100%, 97%)" }}
+        >
+          <TriangleAlert size={14} style={{ color: WARN }} />
+          <span className="font-sans text-xs font-semibold" style={{ color: WARN }}>
+            Extraction flags:
+          </span>
+          {raised.map(([flag]) => (
+            <span key={flag} className="font-sans text-xs" style={{ color: WARN }}>
+              {FLAG_LABELS[flag] ?? flag}
+            </span>
+          ))}
+        </div>
       )}
-      <div className="flex flex-col gap-6">
-        <SourceSection title="Loan Files" count={loanFiles.length} emptyText="No loan files found.">
-          {loanFiles.map(({ raw, display }) => (
-            <SourceRow
-              key={raw}
-              name={display}
-              typeLabel="Loan File"
-              onClick={() => setViewer({ dir: "loan-files", id: display, label: "Loan Files" })}
-            />
-          ))}
-        </SourceSection>
-        <SourceSection title="Complaints" count={complaints.length} emptyText="No complaint files found.">
-          {complaints.map((file) => (
-            <SourceRow
-              key={file}
-              name={file}
-              typeLabel="Complaint"
-              onClick={() => setViewer({ dir: "complaints", id: file.replace(/\.json$/, ""), label: "Complaints" })}
-            />
-          ))}
-        </SourceSection>
+
+      <div className="flex gap-1 border-b overflow-x-auto" style={{ borderColor: "hsl(var(--border))" }}>
+        {types.map((type) => {
+          const present = data[type] != null && !(Array.isArray(data[type]) && data[type].length === 0);
+          const active = tab === type;
+          return (
+            <button
+              key={type}
+              onClick={() => setTab(type)}
+              className="flex items-center gap-1.5 px-3 py-2 font-sans text-sm font-medium whitespace-nowrap transition-colors"
+              style={{
+                color: active ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
+                borderBottom: active ? "2px solid hsl(var(--primary))" : "2px solid transparent",
+                opacity: present ? 1 : 0.55,
+              }}
+            >
+              <FileText size={13} />
+              {data.document_labels[type]}
+              {type === "paystubs" && present && (
+                <span className="rounded-full px-1.5 text-xs" style={{ background: "hsl(var(--muted))" }}>
+                  {data.paystubs.length}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
-    </>
+
+      <Card>
+        <DocumentBody type={tab} docs={data} />
+      </Card>
+    </div>
   );
 }
-
-function WikiComingSoon() {
-  return (
-    <Card className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-      <Share2 size={32} style={{ ...mutedFg, opacity: 0.5 }} />
-      <div>
-        <p className="font-sans text-sm font-medium" style={fg}>
-          LLM Wiki — Coming Soon
-        </p>
-        <p className="font-sans text-xs mt-1 max-w-sm" style={mutedFg}>
-          The compiled knowledge graph (entities, concepts, and syntheses derived from source documents) is planned for a
-          future release. Uploaded documents will auto-ingest into a D3 force-directed wiki.
-        </p>
-      </div>
-    </Card>
-  );
-}
-
-const TABS = [
-  { key: "sources", label: "Sources" },
-  { key: "wiki", label: "Wiki" },
-];
 
 export default function KnowledgeBase() {
-  const [tab, setTab] = useState("sources");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(null);
+  const { data: loans = [], isLoading, isError } = useQuery({
+    queryKey: ["documents"],
+    queryFn: () => apiGet("/api/documents"),
+  });
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return loans;
+    return loans.filter(
+      (l) => l.loan_id.includes(q) || l.borrower_name.toLowerCase().includes(q) || (l.coborrower_name ?? "").toLowerCase().includes(q),
+    );
+  }, [loans, query]);
+  const current = selected ?? loans[0]?.loan_id ?? null;
+
   return (
-    <div className="px-6 py-6 max-w-5xl mx-auto">
+    <div className="px-2 sm:px-6 py-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="font-serif text-2xl font-semibold tracking-tight" style={fg}>
           Knowledge Base
         </h1>
         <p className="font-sans text-sm mt-1" style={mutedFg}>
-          Source documents and compiled knowledge available to the agent at runtime.
+          Each borrower&apos;s loss-mitigation package — the MAA, paystubs, bank statement, credit report and letter of
+          explanation, as extracted.
         </p>
       </div>
-      <SegmentedTabs options={TABS} value={tab} onChange={setTab} />
-      {tab === "sources" ? <Sources /> : <WikiComingSoon />}
+
+      {isLoading && <Status icon={LoaderCircle} spin>Loading loans…</Status>}
+      {isError && <Status icon={CircleAlert}>Failed to load documents. Make sure the API server is running.</Status>}
+      {!isLoading && !isError && loans.length === 0 && (
+        <Status icon={FileText}>No documents yet. Import extracted_data.json with scripts/import_data.py.</Status>
+      )}
+
+      {loans.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start">
+          <aside className="flex flex-col gap-2 md:sticky md:top-4">
+            <label className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={mutedFg} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name or loan #"
+                className="w-full pl-8 pr-3 py-2 rounded-md border font-sans text-sm outline-none"
+                style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--card))", ...fg }}
+              />
+            </label>
+            <p className="font-sans text-xs px-1" style={mutedFg}>
+              {visible.length} of {loans.length} loans
+            </p>
+            <div className="flex flex-col gap-1.5 md:max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+              {visible.map((item) => (
+                <LoanRow key={item.loan_id} item={item} active={item.loan_id === current} onSelect={() => setSelected(item.loan_id)} />
+              ))}
+            </div>
+          </aside>
+          {current && <LoanPackage key={current} loanId={current} />}
+        </div>
+      )}
     </div>
   );
 }

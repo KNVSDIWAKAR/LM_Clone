@@ -2,18 +2,15 @@ import { Route, Switch } from "wouter";
 import AppLayout from "./components/layout/AppLayout";
 import AgentConsole from "./pages/AgentConsole";
 import AgentRuns from "./pages/AgentRuns";
-import AgentStudio from "./pages/AgentStudio";
-import AuditTrail from "./pages/AuditTrail";
 import CommandCenter from "./pages/CommandCenter";
-import Compliance from "./pages/Compliance";
-import DecisionDetail from "./pages/DecisionDetail";
 import DecisionInbox from "./pages/DecisionInbox";
-import Integrations from "./pages/Integrations";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import LossMitigationDashboard from "./pages/LossMitigationDashboard";
 import LossMitigationEndToEnd from "./pages/LossMitigationEndToEnd";
 import NotFound from "./pages/NotFound";
-import SkillsManager from "./pages/SkillsManager";
+import Playbooks from "./pages/Playbooks";
+import Systems from "./pages/Systems";
+import WorkflowRuns from "./pages/WorkflowRuns";
 import {
   FinalModClosing,
   IntakeDocReview,
@@ -35,16 +32,13 @@ export default function App() {
         <Route path="/loss-mit-trial-uw" component={TrialUnderwriting} />
         <Route path="/loss-mit-trial" component={TrialMonitoring} />
         <Route path="/loss-mit-closing" component={FinalModClosing} />
-        <Route path="/agent-studio" component={AgentStudio} />
-        <Route path="/skills-manager" component={SkillsManager} />
         <Route path="/knowledge-base" component={KnowledgeBase} />
-        <Route path="/integrations" component={Integrations} />
-        {/* keyed so navigating between decisions resets local form state */}
-        <Route path="/decision-inbox/:id">{(params) => <DecisionDetail key={params.id} />}</Route>
+        <Route path="/playbooks" component={Playbooks} />
+        <Route path="/systems" component={Systems} />
+        <Route path="/decision-inbox/:id" component={DecisionInbox} />
         <Route path="/decision-inbox" component={DecisionInbox} />
         <Route path="/agent-runs" component={AgentRuns} />
-        <Route path="/compliance" component={Compliance} />
-        <Route path="/audit-trail" component={AuditTrail} />
+        <Route path="/workflow-runs" component={WorkflowRuns} />
         <Route>
           <NotFound title="Page Not Found" />
         </Route>

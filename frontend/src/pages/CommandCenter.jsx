@@ -1,11 +1,10 @@
 import { motion } from "framer-motion";
-import { Bell, ChevronRight, Info, Sparkles, Triangle, TriangleAlert } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bell, ChevronRight, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import PromptInput from "../components/ui/PromptInput";
-import Badge, { priorityVariant } from "../components/ui/Badge";
 import { DOMAIN_JOURNEYS } from "../lib/navigation";
-import { apiGet, apiPost } from "../lib/api";
+import { apiGet } from "../lib/api";
 import { formatShortDate } from "../lib/utils";
 
 export const LOGO_URL =
@@ -46,14 +45,6 @@ function JourneyCard({ icon: Icon, title, description, onClick }) {
   );
 }
 
-function SeverityIcon({ severity }) {
-  if (severity === "warning")
-    return <TriangleAlert size={16} style={{ color: "hsl(38 92% 50%)", flexShrink: 0 }} />;
-  if (severity === "attention")
-    return <Triangle size={16} style={{ color: "hsl(38 92% 50%)", flexShrink: 0 }} />;
-  return <Info size={16} style={{ color: "hsl(217 91% 60%)", flexShrink: 0 }} />;
-}
-
 function SectionHeading({ title, count }) {
   return (
     <div className="flex items-center gap-2 mb-3">
@@ -61,10 +52,7 @@ function SectionHeading({ title, count }) {
         {title}
       </h2>
       {count > 0 && (
-        <span
-          className="font-sans rounded-full px-2 py-0.5 text-xs font-medium"
-          style={{ background: "hsl(var(--muted))", ...muted }}
-        >
+        <span className="font-sans rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: "hsl(var(--muted))", ...muted }}>
           {count}
         </span>
       )}
@@ -80,122 +68,77 @@ function StatusLine({ children }) {
   );
 }
 
+/** Where cases sit across the five processes right now. */
 export function AgentInsights() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["dashboard-insights"],
-    queryFn: () => apiGet("/api/dashboard/insights"),
-  });
-  const insights = data ?? [];
+  const { data, isLoading, isError } = useQuery({ queryKey: ["processes"], queryFn: () => apiGet("/api/processes"), refetchInterval: 10000 });
+  const stages = data ?? [];
 
   return (
     <section>
-      <SectionHeading title="Agent Insights" count={insights.length} />
-      {isLoading && <StatusLine>Loading insights…</StatusLine>}
-      {isError && <StatusLine>Could not load insights.</StatusLine>}
-      <div className="space-y-3">
-        {insights.map((insight, i) => (
-          <div key={i} className="p-4" style={cardStyle}>
-            <div className="flex items-start gap-2.5">
-              <SeverityIcon severity={insight.severity} />
-              <div className="min-w-0">
+      <SectionHeading title="Pipeline" />
+      {isLoading && <StatusLine>Loading stages…</StatusLine>}
+      {isError && <StatusLine>Could not load the pipeline.</StatusLine>}
+      <div className="space-y-2">
+        {stages.map((s) => {
+          const worked = Object.entries(s.counts).filter(([k, n]) => k !== "Not reached" && n > 0);
+          return (
+            <div key={s.stage_no} className="p-3" style={cardStyle}>
+              <div className="flex items-center justify-between gap-2">
                 <p className="font-sans font-semibold" style={{ fontSize: "13px", color: "hsl(var(--foreground))" }}>
-                  {insight.title}
+                  {s.stage_no}. {s.name}
                 </p>
-                <p className="font-sans mt-1" style={{ fontSize: "13px", ...muted }}>
-                  {insight.body}
-                </p>
+                <span className="font-sans text-[11px]" style={muted}>
+                  {s.playbook ? (s.paused ? `${s.paused} in review` : "Playbook live") : "Not built"}
+                </span>
               </div>
+              <p className="font-sans mt-1" style={{ fontSize: "12px", ...muted }}>
+                {worked.length ? worked.map(([k, n]) => `${k} ${n}`).join(" · ") : "No cases worked yet"}
+              </p>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
 }
 
-const actionButton = "font-sans font-medium px-3 py-1.5 rounded transition-opacity hover:opacity-90";
-
+/** Decision Inbox items waiting for a person. */
 export function ActionsRequired() {
-  const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["dashboard-actions"],
-    queryFn: () => apiGet("/api/dashboard/actions"),
+    queryKey: ["decisions", "pending"],
+    queryFn: () => apiGet("/api/decisions?status=pending"),
+    refetchInterval: 10000,
   });
   const actions = data ?? [];
-
-  async function decide(id, decision) {
-    try {
-      await apiPost(`/api/decisions/${id}/decide`, { decision });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-actions"] });
-    } catch {
-      /* the next refetch reflects server state */
-    }
-  }
 
   return (
     <section>
       <SectionHeading title="Actions Required" count={actions.length} />
       {isLoading && <StatusLine>Loading actions…</StatusLine>}
       {isError && <StatusLine>Could not load actions.</StatusLine>}
-      <div className="space-y-3">
-        {actions.map((action) => (
-          <div key={action.id} className="p-4" style={cardStyle}>
+      {!isLoading && !isError && actions.length === 0 && <StatusLine>Nothing is waiting for a decision.</StatusLine>}
+      <div className="space-y-2">
+        {actions.slice(0, 5).map((a) => (
+          <button key={a.id} onClick={() => navigate(`/decision-inbox/${a.id}`)} className="w-full text-left p-3" style={{ ...cardStyle, cursor: "pointer" }}>
             <div className="flex items-start gap-3">
-              <div
-                className="flex items-center justify-center rounded-full shrink-0"
-                style={{ width: 32, height: 32, background: "hsl(213 100% 17% / 0.1)" }}
-              >
-                <Bell size={16} style={{ color: "hsl(var(--primary))" }} />
+              <div className="flex items-center justify-center rounded-full shrink-0" style={{ width: 28, height: 28, background: "hsl(213 100% 17% / 0.1)" }}>
+                <Bell size={14} style={{ color: "hsl(var(--primary))" }} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="font-serif font-medium" style={{ fontSize: "15px", color: "hsl(var(--foreground))" }}>
-                    {action.title}
-                  </h4>
-                  {action.priority && (
-                    <Badge variant={priorityVariant(action.priority)}>{action.priority.toUpperCase()}</Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 mt-1 font-sans" style={{ fontSize: "11px", ...muted }}>
-                  {action.journey && <span className="uppercase tracking-wide">{action.journey}</span>}
-                  {action.journey && action.created_at && <span>·</span>}
-                  {action.created_at && <span>{formatShortDate(action.created_at)}</span>}
-                </div>
-                {action.description && (
-                  <p className="font-sans mt-2" style={{ fontSize: "13px", ...muted }}>
-                    {action.description}
-                  </p>
-                )}
-                <div className="flex items-center gap-2 mt-3">
-                  <button
-                    onClick={() => decide(action.id, "approved")}
-                    className={actionButton}
-                    style={{
-                      fontSize: "12px",
-                      background: "hsl(var(--primary))",
-                      color: "hsl(var(--primary-foreground))",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => decide(action.id, "rejected")}
-                    className={actionButton}
-                    style={{
-                      fontSize: "12px",
-                      background: "transparent",
-                      border: "1px solid hsl(var(--destructive))",
-                      color: "hsl(var(--destructive))",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    Reject
-                  </button>
-                </div>
+                <p className="font-sans font-semibold truncate" style={{ fontSize: "13px", color: "hsl(var(--foreground))" }}>
+                  {a.borrower_name} · {a.loan_id}
+                </p>
+                <p className="font-sans mt-0.5 line-clamp-2" style={{ fontSize: "12px", ...muted }}>
+                  {a.reason}
+                </p>
+                <p className="font-sans mt-1 uppercase tracking-wide" style={{ fontSize: "10px", ...muted }}>
+                  {a.stage_name} · {a.team} · {formatShortDate(a.created_at)}
+                </p>
               </div>
+              <ChevronRight size={16} style={{ ...muted, flexShrink: 0 }} />
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </section>
